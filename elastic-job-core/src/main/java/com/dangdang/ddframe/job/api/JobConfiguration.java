@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 1999-2015 dangdang.com.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -135,6 +135,11 @@ public class JobConfiguration {
     private boolean misfire = true;
     
     /**
+     * 作业辅助监控端口.
+     */
+    private int monitorPort = -1;
+    
+    /**
      * 作业分片策略实现类全路径.
      * 
      * <p>
@@ -159,9 +164,13 @@ public class JobConfiguration {
      * 如果可覆盖, 每次启动作业都以本地配置为准.
      */
     private boolean overwrite;
-    
+
     /**
-     * 作业辅助监控端口.
+     * 作业执行脚本命令行.
+     *
+     * <p>
+     * 只对脚本类型作业起作用.
+     * </p>
      */
-    private int monitorPort = -1;
+    private String scriptCommandLine = "";
 }

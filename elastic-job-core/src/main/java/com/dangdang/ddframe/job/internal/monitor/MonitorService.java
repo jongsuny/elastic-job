@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 1999-2015 dangdang.com.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,11 +32,10 @@ import org.apache.curator.framework.recipes.cache.TreeCache;
 
 import com.dangdang.ddframe.job.api.JobConfiguration;
 import com.dangdang.ddframe.job.internal.config.ConfigurationService;
-import com.dangdang.ddframe.job.internal.util.SensitiveInfoUtils;
+import com.dangdang.ddframe.job.internal.reg.SensitiveInfoUtils;
 import com.dangdang.ddframe.reg.base.CoordinatorRegistryCenter;
 import com.google.common.base.Joiner;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -45,20 +44,19 @@ import lombok.extern.slf4j.Slf4j;
  * @author caohao
  */
 @Slf4j
-@RequiredArgsConstructor
-public final class MonitorService {
+public class MonitorService {
     
     public static final String DUMP_COMMAND = "dump";
     
+    private final String jobName;
+    
     private final CoordinatorRegistryCenter coordinatorRegistryCenter;
+    
+    private final ConfigurationService configService;
     
     private ServerSocket serverSocket;
     
     private volatile boolean closed;
-    
-    private final ConfigurationService configService;
-    
-    private final String jobName;
     
     public MonitorService(final CoordinatorRegistryCenter coordinatorRegistryCenter, final JobConfiguration jobConfiguration) {
         jobName = jobConfiguration.getJobName();
@@ -85,6 +83,7 @@ public final class MonitorService {
     private void openSocketForMonitor(final int port) throws IOException {
         serverSocket = new ServerSocket(port);
         new Thread() {
+            
             @Override
             public void run() {
                 while (!closed) {
@@ -102,13 +101,12 @@ public final class MonitorService {
         try (
                 BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-                Socket autoCloseSocket = socket;
-            ) {
+                Socket autoCloseSocket = socket) {
             String cmdLine = reader.readLine();
             if (null != cmdLine && DUMP_COMMAND.equalsIgnoreCase(cmdLine)) {
                 List<String> result = new ArrayList<>();
                 dumpDirectly("/" + jobName, result);
-                outputMessage(writer, Joiner.on("\n").join(SensitiveInfoUtils.filterSenstiveIps(result)) + "\n");
+                outputMessage(writer, Joiner.on("\n").join(SensitiveInfoUtils.filterSensitiveIps(result)) + "\n");
             }
         } catch (final IOException ex) {
             log.warn(ex.getMessage());
@@ -119,7 +117,10 @@ public final class MonitorService {
         for (String each : coordinatorRegistryCenter.getChildrenKeys(path)) {
             String zkPath = path + "/" + each;
             String zkValue = coordinatorRegistryCenter.get(zkPath);
-            TreeCache treeCache = (TreeCache) coordinatorRegistryCenter.getRawCache();
+            if (null == zkValue) {
+                zkValue = "";
+            }
+            TreeCache treeCache = (TreeCache) coordinatorRegistryCenter.getRawCache("/" + jobName);
             ChildData treeCacheData = treeCache.getCurrentData(zkPath);
             String treeCachePath =  null == treeCacheData ? "" : treeCacheData.getPath();
             String treeCacheValue = null == treeCacheData ? "" : new String(treeCacheData.getData());
@@ -137,6 +138,9 @@ public final class MonitorService {
         outputWriter.flush();
     }
     
+    /**
+     * 关闭作业监听服务.
+     */
     public void close() {
         closed = true;
         if (null != serverSocket && !serverSocket.isClosed()) {
